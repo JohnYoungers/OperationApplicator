@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 
@@ -14,11 +13,11 @@ namespace OperationApplicator
 
         public static Operation Create<TSource, TProperty>(TSource source, Expression<Func<TSource, TProperty>> property) where TSource : class
         {
-            var properties = new Stack<PropertyInfo>();
+            var properties = new LinkedList<PropertyInfo>();
             var memberExp = property.Body as MemberExpression ?? (property.Body as UnaryExpression)?.Operand as MemberExpression;
             while (memberExp is object)
             {
-                properties.Push((PropertyInfo)memberExp.Member);
+                properties.AddFirst((PropertyInfo)memberExp.Member);
                 memberExp = memberExp.Expression as MemberExpression;
             }
 
@@ -26,13 +25,14 @@ namespace OperationApplicator
             {
                 if (pathParts.MoveNext())
                 {
+                    var currentPath = pathParts.Current;
                     var (p, v) = getPathAndValue(
                         pathParts,
                         value is null
-                            ? (pathParts.Current.PropertyType.IsValueType ? Activator.CreateInstance(pathParts.Current.PropertyType) : null)
-                            : pathParts.Current.GetValue(value));
+                            ? (currentPath.PropertyType.IsValueType ? Activator.CreateInstance(currentPath.PropertyType) : null)
+                            : currentPath.GetValue(value));
 
-                    return (new OperationPropertyPath { Property = pathParts.Current, Next = p }, v);
+                    return (new OperationPropertyPath { Property = currentPath, Next = p }, v);
                 }
                 else
                 {
@@ -40,7 +40,7 @@ namespace OperationApplicator
                 }
             }
 
-            var (path, value) = getPathAndValue(properties.Reverse().GetEnumerator(), source);
+            var (path, value) = getPathAndValue(properties.GetEnumerator(), source);
             return new Operation
             {
                 OperationType = OperationTypes.replace,
